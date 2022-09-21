@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Build.VERSION_CODES
 import android.os.Bundle
-import android.os.PersistableBundle
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -22,13 +21,13 @@ import com.google.ar.sceneform.Node
 import com.google.ar.sceneform.Scene
 import com.google.ar.sceneform.rendering.ModelRenderable
 import com.google.ar.sceneform.ux.ArFragment
+import com.namnv.artry.R
 import com.namnv.artry.models.Poster
 import com.namnv.artry.models.Vertex
 import com.namnv.artry.utils.SearchHelper
 import java.lang.Math.toRadians
 import kotlin.math.*
 import kotlin.math.cos as cos1
-import com.namnv.artry.R
 
 
 class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
@@ -45,12 +44,13 @@ class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
     private val direction: ArrayList<Pair<Int, Int>> = ArrayList()
 
     private lateinit var poseList: ArrayList<Pose>
-    private val augmentedImageMap: Map<AugmentedImage, AugmentedImageNode> = HashMap()
+    private val augmentedImageMap: HashMap<AugmentedImage, AugmentedImageNode> = HashMap()
     private lateinit var startPosition: Vertex
     private lateinit var targetPosition: Vertex
     private lateinit var startingImage: AugmentedImage
 
     private var pathFound = false
+    private var imageFound = false
     private var planeFound = false
     private val destFound = false
 
@@ -58,8 +58,9 @@ class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
     private var countRight = 0
 
     @RequiresApi(VERSION_CODES.N)
-    override fun onCreate(savedInstanceState: Bundle?, persistentState: PersistableBundle?) {
-        super.onCreate(savedInstanceState, persistentState)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        Log.d("AR", "Here comes the AR")
+        super.onCreate(savedInstanceState)
         if (!checkIsSupportedDeviceOrFinish(this)) {
             return
         }
@@ -68,13 +69,14 @@ class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
         arFragment = supportFragmentManager.findFragmentById(R.id.ux_fragment) as ArFragment
 
         vertices = intent.extras?.get("vertices") as ArrayList<Vertex>
-        Log.d("VERTICES", vertices.toString())
+        poster = Poster(vertices[0].getLat(), vertices[0].getLng(), vertices[0].getRotation())
+        translation()
         loadRenderable()
-        assert(arFragment != null)
         arFragment.arSceneView.scene.addOnUpdateListener(this)
         pathFound = true
     }
 
+    @RequiresApi(VERSION_CODES.N)
     override fun onUpdate(frameTime: FrameTime) {
         val frame: Frame = arFragment.arSceneView.arFrame as Frame
         assert(frame != null)
@@ -82,6 +84,9 @@ class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
 //        if (!pathFound) {
 //            doSearch()
 //            pathFound = true
+//        }
+//        if (!imageFound) {
+//            detectingImage(frame)
 //        }
         if (!planeFound) {
             arFragment.arSceneView.planeRenderer.isEnabled = true
@@ -96,12 +101,13 @@ class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
 
                     planeFound = true
 
-                    poseList = createPose()
+//                    poseList = createPose()
+                    poseList = createLocalPose()
 
                     val anchorNodeList: ArrayList<AnchorNode> = ArrayList()
                     val nodeList: ArrayList<Node> = ArrayList()
 
-                    for (i in 0..poseList.size) {
+                    for (i in 0 until poseList.size) {
                         val modelRenderable: ModelRenderable = arrowRenderable
                         anchorNodeList.add(i, AnchorNode(arFragment.arSceneView.session?.createAnchor(poseList[i])))
                         anchorNodeList[i].setParent(arFragment.arSceneView.scene)
@@ -120,9 +126,260 @@ class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
 
     }
 
-    private fun doSearch() {
-        vertices = SearchHelper.getCoordinateAndRotation(startPosition, targetPosition)
-        translation()
+    @RequiresApi(VERSION_CODES.N)
+    private fun detectingImage(frame: Frame) {
+        val updatedAugmentedImages = frame.getUpdatedTrackables(
+            AugmentedImage::class.java
+        )
+        for (augmentedImage in updatedAugmentedImages) {
+            // break the loop once we detected a image
+            if (imageFound) break
+            when (augmentedImage.trackingState) {
+                TrackingState.PAUSED -> {
+                    // When an image is in PAUSED state, but the camera is not PAUSED, it has been detected,
+                    // but not yet tracked.
+                    val text = "Detecting Image " + augmentedImage.name
+//                    if (!SnackbarHelper.getInstance().isShowing()) SnackbarHelper.getInstance()
+//                        .showMessage(this, text)
+                }
+                TrackingState.TRACKING -> {
+                    // Have to switch to UI Thread to update View.
+                    fitToScanView.visibility = View.GONE
+
+                    // Create a new anchor for newly found images and record it.
+                    if (!augmentedImageMap.containsKey(augmentedImage)) {
+                        val node = AugmentedImageNode(this)
+                        node.setImage(augmentedImage)
+                        augmentedImageMap[augmentedImage] = node
+                        //arFragment.getArSceneView().getScene().addChild(node);
+
+                        // record the start point, which is the image we just scan
+                        startingImage = augmentedImage
+                        imageFound = true
+
+                        // cancel the "Detecting Image" text once totally tracking the image
+//                        if (SnackbarHelper.getInstance().isShowing()) SnackbarHelper.getInstance()
+//                            .hide(this)
+                    }
+                }
+                TrackingState.STOPPED -> augmentedImageMap.remove(augmentedImage)
+            }
+        }
+    }
+
+    private fun createLocalPose(): ArrayList<Pose> {
+        var postList: ArrayList<Pose> = ArrayList(100)
+
+        if (dist.size == direction.size) {
+            var v0 = vertices[0].getLat().toFloat()
+            val v1 = vertices[0].getLng().toFloat() - 1.5f
+            var v2 = dist[0]
+            val initDirec: Pair<String, String> = Pair("v2", "+")
+            postList.add(0, Pose.makeTranslation(v0, v1, v2).compose(
+                Pose.makeRotation(
+                    cos1(0F/2), 0F, sin(0F / 2), 0F
+                )
+            ))
+
+            var previousVector = initDirec.first
+            var previousMove = initDirec.second
+
+            var currDir: Pair<Int, Int> = direction[0]
+            var nextDir: Pair<Int, Int>
+
+            Log.d("Dist size", dist.size.toString())
+            for (i in 1 until 11) {
+                Log.d("This is index", i.toString())
+                Log.d("Post list size", postList.size.toString())
+                nextDir = direction[i]
+                if (i == 1) {
+                    val secondDirect = setDirection(poster, vertices[0], vertices[1])
+                    if (secondDirect != null) {
+                        previousVector = secondDirect.first
+                        previousMove = secondDirect.second
+                    }
+                }
+
+                when (check(currDir, nextDir)) {
+                    "S" -> if (previousVector == "v2") {
+                        if (previousMove == "-") {
+                            v2 -= dist[i] // rotate about y axis for 180 degree
+                            postList.add(
+                                i,
+                                Pose.makeTranslation(v0, v1, v2).compose(
+                                    Pose.makeRotation(
+                                        cos1(PI / 2).toFloat(), 0f, sin(PI / 2).toFloat(), 0f
+                                    )
+                                )
+                            )
+                        } else {
+                            v2 += dist[i] // rotate about y axis for 0 degree
+                            postList.add(
+                                i,
+                                Pose.makeTranslation(v0, v1, v2).compose(
+                                    Pose.makeRotation(
+                                        cos1(0F / 2), 0f, sin(0F / 2), 0f
+                                    )
+                                )
+                            )
+                        }
+                    } else {
+                        if (previousMove == "-") {
+                            v0 -= dist[i] // rotate about y axis for 90 degree
+                            postList.add(
+                                i,
+                                Pose.makeTranslation(v0, v1, v2).compose(
+                                    Pose.makeRotation(
+                                        cos1(PI / 2 / 2).toFloat(), 0f, sin(PI / 2 / 2).toFloat(), 0f
+                                    )
+                                )
+                            )
+                        } else {
+                            v0 += dist[i] // rotate about y axis for 270 degree
+                            postList.add(
+                                i,
+                                Pose.makeTranslation(v0, v1, v2).compose(
+                                    Pose.makeRotation(
+                                        cos1(PI * 3 / 2 / 2).toFloat(),
+                                        0f,
+                                        sin(PI * 3 / 2 / 2).toFloat(),
+                                        0f
+                                    )
+                                )
+                            )
+                        }
+                    }
+                    "L" -> {
+                        countLeft++
+                        if (previousVector == "v2") {
+                            if (previousMove == "-") {
+                                v0 -= dist[i] // rotate about y axis for 90 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(PI / 2 / 2).toFloat(),
+                                            0f,
+                                            sin(PI / 2 / 2).toFloat(),
+                                            0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v0"
+                                previousMove = "-"
+                            } else {
+                                v0 += dist[i] // rotate about y axis for 270 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(PI * 3 / 2 / 2).toFloat(),
+                                            0f,
+                                            sin(PI * 3 / 2 / 2).toFloat(),
+                                            0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v0"
+                                previousMove = "+"
+                            }
+                        } else {
+                            if (previousMove == "-") {
+                                v2 += dist[i] // rotate about y axis for 0 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(0F / 2), 0f, sin(0F / 2), 0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v2"
+                                previousMove = "+"
+                            } else {
+                                v2 -= dist[i] // rotate about y axis for 180 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(PI / 2).toFloat(), 0f, sin(PI / 2).toFloat(), 0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v2"
+                                previousMove = "-"
+                            }
+                        }
+                    }
+                    "R" -> {
+                        countRight++
+                        if (previousVector == "v2") {
+                            if (previousMove == "-") {
+                                v0 += dist[i] // rotate about y axis for 270 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(PI * 3 / 2 / 2).toFloat(),
+                                            0f,
+                                            sin(PI * 3 / 2 / 2).toFloat(),
+                                            0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v0"
+                                previousMove = "+"
+                            } else {
+                                v0 -= dist[i] // rotate about y axis for 90 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(PI / 2 / 2).toFloat(),
+                                            0f,
+                                            sin(PI / 2 / 2).toFloat(),
+                                            0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v0"
+                                previousMove = "-"
+                            }
+                        } else {
+                            if (previousMove == "-") {
+                                v2 -= dist[i] // rotate about y axis for 180 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(PI / 2).toFloat(), 0f, sin(PI / 2).toFloat(), 0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v2"
+                                previousMove = "-"
+                            } else {
+                                v2 += dist[i] // rotate about y axis for 0 degree
+                                postList.add(
+                                    i,
+                                    Pose.makeTranslation(v0, v1, v2).compose(
+                                        Pose.makeRotation(
+                                            cos1(0F / 2), 0f, sin(0F / 2), 0f
+                                        )
+                                    )
+                                )
+                                previousVector = "v2"
+                                previousMove = "+"
+                            }
+                        }
+                    }
+                }
+
+                currDir = nextDir
+            }
+        }
+
+        return postList
     }
 
     private fun createPose(): ArrayList<Pose> {
@@ -425,7 +682,7 @@ class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
     }
 
     private fun translation() {
-        for (i in 1..vertices.size) {
+        for (i in 1 until vertices.size) {
             val lat1: Double = vertices[i - 1].getLat()
             val lng1: Double = vertices[i - 1].getLng()
             val lat2: Double = vertices[i].getLat()

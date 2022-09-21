@@ -22,7 +22,7 @@ class AugmentedImageFragment: ArFragment() {
         private val TAG = "AugmentedImageFragment"
         private val USE_SINGLE_IMAGE = false
         private val DEFAULT_IMAGE_NAME = "default.jpg"
-        private val SAMPLE_IMAGE_DATABASE = ""
+        private val SAMPLE_IMAGE_DATABASE = "arImgDB/myimages123.imgdb"
         private val MIN_OPENGL_VERSION = 3.0
     }
 
