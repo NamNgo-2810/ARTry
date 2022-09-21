@@ -2,7 +2,9 @@ package com.namnv.artry.utils
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import com.namnv.artry.models.Vertex
 import java.util.*
+import kotlin.collections.ArrayList
 
 class PathFinding
 @RequiresApi(Build.VERSION_CODES.N) constructor(
@@ -85,6 +87,21 @@ class PathFinding
         return false
     }
 
+    fun findVertices(): ArrayList<Vertex> {
+        var current = endNode
+        val vertices: ArrayList<Vertex> = ArrayList()
+        var direction: Pair<Int, Int> = Pair(endNode.getRow() - endNode.getParent().getRow(), endNode.getCol() - endNode.getParent().getCol())
+        vertices.add(Vertex(endNode.getRow().toDouble(), endNode.getCol().toDouble(), Pair(0, 0)))
+        current = endNode.getParent()
+        while (current != startNode) {
+            vertices.add(Vertex(current.getRow().toDouble(), current.getCol().toDouble(), direction))
+            direction = Pair(current.getRow() - current.getParent().getRow(), current.getCol() - current.getParent().getCol())
+            current = current.getParent()
+        }
+
+        return vertices
+    }
+
     fun findPath(): Deque<Node> {
         var current = endNode
         val path: Deque<Node> = ArrayDeque()
@@ -92,8 +109,9 @@ class PathFinding
         println(current.toString())
         while (current != startNode) {
             current = current.getParent()
-            path.add(current)
+            path.addFirst(current)
         }
+
         return path
     }
 

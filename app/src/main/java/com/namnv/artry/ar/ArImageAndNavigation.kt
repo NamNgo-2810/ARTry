@@ -6,6 +6,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Build.VERSION_CODES
+import android.os.Bundle
+import android.os.PersistableBundle
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -23,13 +25,13 @@ import com.google.ar.sceneform.ux.ArFragment
 import com.namnv.artry.models.Poster
 import com.namnv.artry.models.Vertex
 import com.namnv.artry.utils.SearchHelper
-import java.lang.Math.pow
 import java.lang.Math.toRadians
 import kotlin.math.*
 import kotlin.math.cos as cos1
+import com.namnv.artry.R
 
 
-public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
+class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
     private val TAG = ArImageAndNavigation::class.java.simpleName
     private val MIN_OPENGL_VERSION = 3.0
     private lateinit var arFragment: ArFragment
@@ -55,15 +57,33 @@ public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
     private var countLeft = 0
     private var countRight = 0
 
+    @RequiresApi(VERSION_CODES.N)
+    override fun onCreate(savedInstanceState: Bundle?, persistentState: PersistableBundle?) {
+        super.onCreate(savedInstanceState, persistentState)
+        if (!checkIsSupportedDeviceOrFinish(this)) {
+            return
+        }
+        setContentView(R.layout.activity_ar_image_and_navigation)
+
+        arFragment = supportFragmentManager.findFragmentById(R.id.ux_fragment) as ArFragment
+
+        vertices = intent.extras?.get("vertices") as ArrayList<Vertex>
+        Log.d("VERTICES", vertices.toString())
+        loadRenderable()
+        assert(arFragment != null)
+        arFragment.arSceneView.scene.addOnUpdateListener(this)
+        pathFound = true
+    }
+
     override fun onUpdate(frameTime: FrameTime) {
         val frame: Frame = arFragment.arSceneView.arFrame as Frame
         assert(frame != null)
 
-        if (!pathFound) {
-            doSearch()
-            pathFound = true
-        }
-        else if (!planeFound) {
+//        if (!pathFound) {
+//            doSearch()
+//            pathFound = true
+//        }
+        if (!planeFound) {
             arFragment.arSceneView.planeRenderer.isEnabled = true
             arFragment.planeDiscoveryController.show()
 
@@ -102,7 +122,7 @@ public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
 
     private fun doSearch() {
         vertices = SearchHelper.getCoordinateAndRotation(startPosition, targetPosition)
-
+        translation()
     }
 
     private fun createPose(): ArrayList<Pose> {
@@ -118,7 +138,7 @@ public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
             v2 = calCoord.second
 
             val initDirec: Pair<String, String> = Pair("v2", "+")
-            postList.add(0, Pose.makeTranslation(v0, v1, v2.toFloat()).compose(Pose.makeRotation(
+            postList.add(0, Pose.makeTranslation(v0, v1, v2).compose(Pose.makeRotation(
                 cos1(0F/2), 0F, sin(0F / 2), 0F)))
 
             var previousVector = initDirec.first
@@ -411,7 +431,19 @@ public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
             val lat2: Double = vertices[i].getLat()
             val lng2: Double = vertices[i].getLng()
 
-            dist.add(greatCircle(lat1, lng1, lat2, lng2) * 0.99990853739f)
+            dist.add(greatCircle(lat1, lng1, lat2, lng2) * 0.99990857f)
+
+            val dlat: Double = lat2 - lat1
+            val dlng: Double = lng2 - lng1
+
+            if (Math.abs(dlat) > Math.abs(dlng)) {
+                if (dlat > 0) direction.add(Pair(1, 0))
+                else direction.add(Pair(-1, 0))
+            }
+            else {
+                if (dlng > 0) direction.add(Pair(0, 1))
+                else direction.add(Pair(0, -1))
+            }
         }
     }
 
@@ -430,7 +462,7 @@ public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
         // Haversine Formula
         val dlong = long2 - long1
         val dlat = lat2 - lat1
-        var ans = pow(sin(dlat / 2), 2.0) + cos1(lat1) * cos1(lat2) * pow(sin(dlong / 2), 2.0)
+        var ans = sin(dlat / 2).pow(2.0) + cos1(lat1) * cos1(lat2) * sin(dlong / 2).pow(2.0)
         ans = 2 * asin(sqrt(ans))
 
         // Radius of Earth in
@@ -462,12 +494,12 @@ public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
             }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (augmentedImageMap.isEmpty()) {
-            fitToScanView.visibility = View.VISIBLE
-        }
-    }
+//    override fun onResume() {
+//        super.onResume()
+//        if (augmentedImageMap.isEmpty()) {
+//            fitToScanView.visibility = View.VISIBLE
+//        }
+//    }
 
 //    fun networkChecking() {
 //        if (!networkThreadBusy) {
@@ -479,7 +511,7 @@ public class ArImageAndNavigation: AppCompatActivity(), Scene.OnUpdateListener {
 //        }
 //    }
 
-    fun checkIsSupportedDeviceOrFinish(activity: Activity): Boolean {
+    private fun checkIsSupportedDeviceOrFinish(activity: Activity): Boolean {
         if (Build.VERSION.SDK_INT < VERSION_CODES.N) {
             Log.e(TAG, "Sceneform requires Android N or later")
             Toast.makeText(activity, "Sceneform requires Android N or later", Toast.LENGTH_LONG)

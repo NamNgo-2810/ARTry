@@ -12,6 +12,8 @@ import android.widget.*
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import com.namnv.artry.R
+import com.namnv.artry.ar.ArImageAndNavigation
+import com.namnv.artry.models.Vertex
 import com.namnv.artry.utils.NavigationService
 
 class Launcher : AppCompatActivity() {
@@ -21,8 +23,11 @@ class Launcher : AppCompatActivity() {
     private var destinations = ArrayList<String>()
     var current: IntArray? = intArrayOf(0, 0)
     lateinit var map: ImageView
+    lateinit var button: Button
     var mService: NavigationService? = null
     var isBound = false
+
+    var vertices: ArrayList<Vertex> = ArrayList()
 
     private val connection: ServiceConnection = object : ServiceConnection {
         @RequiresApi(Build.VERSION_CODES.O)
@@ -46,11 +51,18 @@ class Launcher : AppCompatActivity() {
         initLocation()
         val intent = Intent(this, NavigationService::class.java)
 
-        map = findViewById(R.id.map)
+        map = findViewById(R.id.mapTop)
+        button = findViewById(R.id.button)
         bindService(intent, connection, BIND_AUTO_CREATE)
         startService(intent)
         initSpinner()
 
+        button.setOnClickListener {
+            val intent = Intent(this, ArImageAndNavigation::class.java).apply {
+                putExtra("vertices", vertices)
+            }
+            startActivity(intent)
+        }
     }
 
     private fun initSpinner() {
@@ -81,7 +93,9 @@ class Launcher : AppCompatActivity() {
                 map.setImageBitmap(null)
                 val destination: IntArray? = locationMap[p2 - 1]
                 if (destination != null) {
-                    current?.let { mService?.findPath(map, it, destination) }
+                    current?.let {
+                        vertices = mService?.findPath(map, it, destination)!!
+                    }
                 }
             }
 

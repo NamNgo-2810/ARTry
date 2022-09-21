@@ -34,7 +34,7 @@ class AugmentedImageNode @RequiresApi(Build.VERSION_CODES.N) constructor(context
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    public fun setImage(image: AugmentedImage) {
+    fun setImage(image: AugmentedImage) {
         this.image = image
 
         if (!ulCorner!!.isDone || !urCorner!!.isDone || !llCorner!!.isDone || !lrCorner!!.isDone) {
@@ -86,7 +86,7 @@ class AugmentedImageNode @RequiresApi(Build.VERSION_CODES.N) constructor(context
 
     }
 
-    public fun getImage(): AugmentedImage {
+    fun getImage(): AugmentedImage {
         return this.image
     }
 }

@@ -7,9 +7,11 @@ class SearchHelper {
 
 
     companion object {
-        public fun getCoordinateAndRotation(startPosition: Vertex, targetPosition: Vertex): ArrayList<Vertex> {
-            val vertices: ArrayList<Vertex> = ArrayList()
 
+
+
+        fun getCoordinateAndRotation(startPosition: Vertex, targetPosition: Vertex): ArrayList<Vertex> {
+            val vertices: ArrayList<Vertex> = ArrayList()
 
             return vertices
         }

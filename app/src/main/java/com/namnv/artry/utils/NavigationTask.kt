@@ -10,16 +10,19 @@ import android.os.Build
 import android.util.Log
 import android.widget.ImageView
 import androidx.annotation.RequiresApi
+import com.namnv.artry.models.Vertex
 import java.util.*
+import kotlin.collections.ArrayList
 
 class NavigationTask :
-    AsyncTask<TaskParameters, Node, String>() {
+    AsyncTask<TaskParameters, Node, ArrayList<Vertex>>() {
     private var temp: Bitmap? = null
     private var paint: Paint? = null
     private var canvas: Canvas? = null
+    @Deprecated("Deprecated in Java")
     @RequiresApi(Build.VERSION_CODES.N)
     @SuppressLint("ResourceAsColor")
-    protected override fun doInBackground(vararg taskParameters: TaskParameters): String? {
+    override fun doInBackground(vararg taskParameters: TaskParameters): ArrayList<Vertex> {
         Log.d("NavigationTask", "doInBackground")
         val mapMatrix = taskParameters[0].MapMatrix
         map = taskParameters[0].map
@@ -35,13 +38,17 @@ class NavigationTask :
         val result: Boolean = aStar.search()
         println(result)
         var path: Deque<Node> = ArrayDeque()
-        if (result) path = aStar.findPath()
+        var vertices: ArrayList<Vertex> = ArrayList()
+        if (result) {
+            path = aStar.findPath()
+            vertices = aStar.findVertices()
+        }
         try {
             Thread.sleep(500)
         } catch (e: InterruptedException) {
             e.printStackTrace()
         }
-        paint = Paint(Paint.ANTI_ALIAS_FLAG) // 画笔抗锯齿
+        paint = Paint(Paint.ANTI_ALIAS_FLAG)
         val color = Color.parseColor("#008B00")
         paint!!.color = color
         if (canvas == null) {
@@ -59,10 +66,11 @@ class NavigationTask :
             publishProgress(curretloc)
         }
         canvas!!.drawCircle(destination[0].toFloat(), destination[1].toFloat(), 2.1f, paint!!)
-        return null
+        return vertices
     }
 
-    protected override fun onProgressUpdate(vararg nodes: Node) {
+    @Deprecated("Deprecated in Java")
+    override fun onProgressUpdate(vararg nodes: Node) {
         Log.d("NavigationTask", "ProgressUpdate")
         //bitmap should be mutable
         //location画圆
@@ -74,7 +82,8 @@ class NavigationTask :
         //super.onProgressUpdate(values);
     }
 
-    override fun onPostExecute(s: String?) {
+    @Deprecated("Deprecated in Java")
+    override fun onPostExecute(result: ArrayList<Vertex>?) {
         Log.d("NavigationTask", "PostExecute")
         map!!.setImageBitmap(temp)
         //You cannot recycle the Bitmap while using it on in the UI, the Bitmap has to be kept in memory.
@@ -85,9 +94,10 @@ class NavigationTask :
 //        if (!temp.isRecycled()) {
 //            temp.recycle();
 //        }
-        super.onPostExecute(s)
+        super.onPostExecute(result)
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onCancelled() {
         Log.d("NavigationTask", "onCancelled")
         super.onCancelled()
